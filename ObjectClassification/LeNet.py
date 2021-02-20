@@ -14,6 +14,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchsummary import summary
 
 
 class LeNet(nn.Module):
@@ -63,6 +64,7 @@ class LeNet(nn.Module):
 if __name__ == "__main__":
 
     net = LeNet()
+    summary(net, input_size=(1, 32, 32), batch_size=-1, device='cpu')
     x = torch.zeros((2, 1, 32, 32))
     print("input: ", x.shape)
     out = net(x)
