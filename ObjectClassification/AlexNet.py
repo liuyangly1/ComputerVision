@@ -16,29 +16,29 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class LRN(nn.Module):
-    """LRN
-    Local response normalization
+# class LRN(nn.Module):
+#     """LRN
+#     Local response normalization
 
-    https://github.com/pytorch/pytorch/issues/653
-    """
-    def __init__(self, n, alpha=1e-4, beta=0.75, k=1):
+#     https://github.com/pytorch/pytorch/issues/653
+#     """
+#     def __init__(self, n, alpha=1e-4, beta=0.75, k=1):
 
-        self.average = nn.AvgPool2d(kernel_size=n, stride=1, padding=int((n-1.0)/2))
+#         self.average = nn.AvgPool2d(kernel_size=n, stride=1, padding=int((n-1.0)/2))
+#         nn.LocalResponseNorm
+#         self.alpha = alpha
+#         self.beta = beta
+#         self.k = k
 
-        self.alpha = alpha
-        self.beta = beta
-        self.k = k
+#     def forward(self, x):
 
-    def forward(self, x):
+#         div = x.pow(2)
+#         div = self.average(div)
+#         div = div.mul(self.alpha).add(1.0).pow(self.beta)
 
-        div = x.pow(2)
-        div = self.average(div)
-        div = div.mul(self.alpha).add(1.0).pow(self.beta)
+#         x = x.div(div)
 
-        x = x.div(div)
-
-        return x
+#         return x
 
 
 class AlexNet(nn.Module):
@@ -75,11 +75,13 @@ class AlexNet(nn.Module):
             nn.Conv2d(3, 96, (11, 11), 4, 2),
             nn.ReLU(inplace=True),
             nn.MaxPool2d((3, 3), (2, 2)),
+            nn.LocalResponseNorm(size=2, alpha=1e-4, beta=0.75, k=1.),
 
             # layer 2
             nn.Conv2d(96, 256, (5, 5), 1, 2),
             nn.ReLU(inplace=True),
             nn.MaxPool2d((3, 3), (2, 2)),
+            nn.LocalResponseNorm(size=2, alpha=1e-4, beta=0.75, k=1.),
 
             # layer 3
             nn.Conv2d(256, 384, (3, 3), 1, 1),

@@ -21,12 +21,12 @@ class LeNet(nn.Module):
     不完全连接卷积未实现，用完全卷积代替
 
     Input - 1x32x32  (Input)
-    C1    - 6@28x28  (Conv, kernel=5x5, relu)
+    C1    - 6@28x28  (Conv, kernel=5x5, ReLU)
     S2    - 6@14x14  (MaxPool,kernel=2x2, stride=2)
-    C3    - 16@10x10 (Conv, kernel=5x5, relu)
+    C3    - 16@10x10 (Conv, kernel=5x5, ReLU)
     S4    - 16@5x5   (MaxPool, kernel=2x2, stride=2)
-    C5    - 120@1x1  (Conv, kernel=5x5, relu)
-    F6    - 84       (Linear, relu)
+    C5    - 120@1x1  (Conv, kernel=5x5, ReLU)
+    F6    - 84       (Linear, ReLU)
     F7    - 10       (Linear, LogSoftmax)
     """
     def __init__(self):
