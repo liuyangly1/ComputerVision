@@ -14,7 +14,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from torchsummary import summary
 
 # class LRN(nn.Module):
 #     """LRN
@@ -125,6 +125,7 @@ class AlexNet(nn.Module):
 
 if __name__ == "__main__":
     net = AlexNet(num_classes=1000)
+    summary(net, input_size=(3, 224, 224), batch_size=-1, device='cpu')
     x = torch.zeros((2, 3, 224, 224))
     print(net)
     print("input: ", x.shape)
