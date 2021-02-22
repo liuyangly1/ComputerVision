@@ -60,7 +60,7 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         top5.update(acc5[0], images.size(0))
 
         # compute gradient and do Adam step
-        
+        print(i)
         optimizer.zero_grad()
         # if mixed_precision:
         #     with amp.scale_loss(loss, optimizer) as scaled_loss:
@@ -69,7 +69,6 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         #     loss.backward()
         loss.backward()
         optimizer.step()
-        
 
         # measure elapsed time
         batch_time.update(time.time() - end)
@@ -195,7 +194,8 @@ def accuracy(output, target, topk=(1,)):
 def get_network(args):
 
     if args.arch == 'AlexNet':
-        from AlexNet import AlexNet
+        sys.path.append('../')
+        from Model import AlexNet
         net = AlexNet(args.num_classes)
     else:
         print('the network name you have entered is not supported yet')
@@ -245,20 +245,3 @@ def get_cifar100_test_dataloader(args):
         )
 
     return cifar100_test_loader
-
-
-if __name__ == "__main__":
-
-    import argparse
-    parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
-    args = parser.parse_args()
-    args.shuffle = True
-    args.num_workers = 4
-    args.batch_size = 32
-    cifar100_training_loader = get_cifar100_training_dataloader(args)
-
-    # cifar100_test_loader = get_test_dataloader(args)
-
-    for batch_index, (images, labels) in enumerate(cifar100_training_loader):
-        print(images.shape, labels.shape)
-        break
