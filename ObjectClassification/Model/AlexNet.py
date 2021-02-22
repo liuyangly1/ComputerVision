@@ -71,6 +71,7 @@ class AlexNet(nn.Module):
         super(AlexNet, self).__init__()
 
         self.feature = nn.Sequential(
+
             # layer 1
             nn.Conv2d(3, 96, (11, 11), 4, 2),
             nn.ReLU(inplace=True),
@@ -127,7 +128,7 @@ if __name__ == "__main__":
     net = AlexNet(num_classes=1000)
     summary(net, input_size=(3, 224, 224), batch_size=-1, device='cpu')
     x = torch.zeros((2, 3, 224, 224))
-    print(net)
+    # print(net)
     print("input: ", x.shape)
     out = net(x)
     print("output: ", out.shape)
