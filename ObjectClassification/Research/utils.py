@@ -26,6 +26,7 @@ from torch.utils.data import DataLoader
 # except Exception:
 #     mixed_precision = False
 #     warnings.warn("Warning: Apex tool not install.")
+sys.path.append('../')
 
 
 def train(train_loader, model, criterion, optimizer, epoch, args):
@@ -60,7 +61,7 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         top5.update(acc5[0], images.size(0))
 
         # compute gradient and do Adam step
-        print(i)
+
         optimizer.zero_grad()
         # if mixed_precision:
         #     with amp.scale_loss(loss, optimizer) as scaled_loss:
@@ -194,7 +195,7 @@ def accuracy(output, target, topk=(1,)):
 def get_network(args):
 
     if args.arch == 'AlexNet':
-        sys.path.append('../')
+        
         from Model import AlexNet
         net = AlexNet(args.num_classes)
     else:

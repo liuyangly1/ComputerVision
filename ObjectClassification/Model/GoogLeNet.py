@@ -55,6 +55,33 @@ class inception(nn.Module):
         return x
 
 
+class InceptionAux(nn.Module):
+
+    def __init__(self, in_channels, num_classes):
+        super(InceptionAux, self).__init__()
+        self.conv = BasicConv2d(in_channels, 128, kernel_size=1)
+
+        self.fc1 = nn.Linear(2048, 1024)
+        self.fc2 = nn.Linear(1024, num_classes)
+
+    def forward(self, x):
+        # aux1: N x 512 x 14 x 14, aux2: N x 528 x 14 x 14
+        x = F.adaptive_avg_pool2d(x, (4, 4))
+        # aux1: N x 512 x 4 x 4, aux2: N x 528 x 4 x 4
+        x = self.conv(x)
+        # N x 128 x 4 x 4
+        x = torch.flatten(x, 1)
+        # N x 2048
+        x = F.relu(self.fc1(x), inplace=True)
+        # N x 2048
+        x = F.dropout(x, 0.7, training=self.training)
+        # N x 2048
+        x = self.fc2(x)
+        # N x 1024
+
+        return x
+
+
 class GoogLeNet(nn.Module):
     r"""Overview
     Input - 3x224x224     (Input)
@@ -79,9 +106,10 @@ class GoogLeNet(nn.Module):
                                 (Dropout(0.4))
     F             - 1000        (Linear, ReLU, Softmax)
     """
-    def __init__(self, num_class=1000):
-
+    def __init__(self, num_classes=1000, aux_logits=True, init_weights=True):
         super().__init__()
+        self.aux_logits = aux_logits
+
         self.pre_conv = nn.Sequential(
             nn.Conv2d(3, 64, (7, 7), 2, 3),
             nn.ReLU(inplace=True),
@@ -111,10 +139,29 @@ class GoogLeNet(nn.Module):
             nn.Dropout(p=0.4)
         )
 
+        if aux_logits:
+            self.aux1 = InceptionAux(512, num_classes)
+            self.aux2 = InceptionAux(528, num_classes)
+
         self.classify = nn.Sequential(
-            nn.Linear(1024*1*1, num_class),
+            nn.Linear(1024*1*1, num_classes),
             # nn.Sigmoid()
         )
+        if init_weights:
+            self._initialize_weights()
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
+                import scipy.stats as stats
+                X = stats.truncnorm(-2, 2, scale=0.01)
+                values = torch.as_tensor(X.rvs(m.weight.numel()), dtype=m.weight.dtype)
+                values = values.view(m.weight.size())
+                with torch.no_grad():
+                    m.weight.copy_(values)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
         x = self.pre_conv(x)
