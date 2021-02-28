@@ -77,17 +77,17 @@ class Conv_ReLu(nn.Module):
 
 class VGGNet(nn.Module):
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, num_classes):
         super().__init__()
         self.feature = self._make_layers(cfg)
         self.classify = nn.Sequential(
-            nn.Linear(512*7*7, 4096),
+            nn.Linear(512*1*1, 4096),
             nn.ReLU(inplace=True),
             nn.Dropout(),
             nn.Linear(4096, 4096),
             nn.ReLU(inplace=True),
             nn.Dropout(),
-            nn.Linear(4096, 1000),
+            nn.Linear(4096, num_classes),
             # nn.Softmax(dim=1)
         )
 
@@ -115,28 +115,28 @@ class VGGNet(nn.Module):
         return nn.Sequential(*layers)
 
 
-def vgg11_bn():
-    return VGGNet(cfgs['A'])
+def vgg11_bn(num_classes):
+    return VGGNet(cfgs['A'], num_classes)
 
 
-def vgg13_bn():
-    return VGGNet(cfgs['B'])
+def vgg13_bn(num_classes):
+    return VGGNet(cfgs['B'], num_classes)
 
 
-def vgg16_bn():
-    return VGGNet(cfgs['D'])
+def vgg16_bn(num_classes):
+    return VGGNet(cfgs['D'], num_classes)
 
 
-def vgg19_bn():
-    return VGGNet(cfgs['E'])
+def vgg19_bn(num_classes):
+    return VGGNet(cfgs['E'], num_classes)
 
 
 if __name__ == "__main__":
 
-    net = vgg19_bn()
-    summary(net, input_size=(3, 224, 224), batch_size=-1, device='cpu')
+    net = vgg19_bn(num_classes=1000)
+    # summary(net, input_size=(3, 32, 32), batch_size=-1, device='cpu')
 
-    x = torch.zeros((2, 3, 224, 224))
+    x = torch.zeros((2, 3, 32, 32))
 
     print("input:", x.shape)
 
@@ -144,6 +144,6 @@ if __name__ == "__main__":
 
     print("output:", x.shape)
 
-    import torchvision.models as models
-    model = models.vgg19()
-    summary(model, input_size=(3, 224, 224), batch_size=-1, device='cpu')
+    # import torchvision.models as models
+    # model = models.vgg19()
+    # summary(model, input_size=(3, 224, 224), batch_size=-1, device='cpu')

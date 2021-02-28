@@ -84,7 +84,7 @@ class CIFAR100Dataset(Dataset):
         if self.transform is not None:
             image = self.transform(image)
 
-        image = torch.transpose(image, 0, 2)
+        # image = torch.transpose(image, 0, 2)
         # [-1, 3, 32, 32] [-1, 32]
         return image, target
 
@@ -118,15 +118,18 @@ def get_CIFAR_100_dataloader(
 ):
 
     transform_train = transforms.Compose([
-        # transforms.ToPILImage(),
+        transforms.ToPILImage(),
         # transforms.RandomCrop(32, padding=4),
         # transforms.RandomHorizontalFlip(),
         # transforms.RandomRotation(15),
+        # transforms.Resize(224),
         transforms.ToTensor(),  # 灰度范围从0-255变换到0-1之间
         transforms.Normalize(mean, std)  # 灰度范围从0-1变换到(-1,1)
     ])
 
     transform_test = transforms.Compose([
+        transforms.ToPILImage(),
+        # transforms.Resize(224),
         transforms.ToTensor(),
         transforms.Normalize(mean, std)
     ])
