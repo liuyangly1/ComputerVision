@@ -13,10 +13,13 @@
 import shutil
 import sys
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim
 import torchvision
+from torchvision import transforms
+from torch.utils.data import Dataset, DataLoader
 
 
 class AverageMeter(object):
@@ -75,20 +78,21 @@ def get_network(arch, num_classes):
     return net
 
 
-def adjust_learning_rate(optimizer, epoch, args):
-    """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    lr = args.lr * (0.1 ** (epoch // 30))
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+def get_optimizer(model, learning_rate, momentum, weight_decay):
 
-
-def get_optimizer(model, learning_rate, **keywords):
-    return torch.optim.SGD(model.parameters(), learning_rate, **keywords)
+    return torch.optim.SGD(model.parameters(), learning_rate, momentum, weight_decay)
 
 
 def get_criterion():
 
     return nn.CrossEntropyLoss()
+
+
+def adjust_learning_rate(optimizer, epoch, args):
+    """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
+    lr = args.lr * (0.1 ** (epoch // 30))
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
 
 
 def accuracy(output, target, topk=(1,)):
@@ -112,3 +116,25 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth'):
     torch.save(state, filename)
     if is_best:
         shutil.copyfile(filename, "model_best.pth")
+
+
+def compute_mean_std(dataloader, normalize=True):
+    """compute the mean and std of cifar100 dataset
+    Args:
+        cifar100_training_dataset or cifar100_test_dataset
+        witch derived from class torch.utils.data
+
+    Returns:
+        a tuple contains mean, std value of entire dataset
+    """
+    mean = torch.zeros(3)
+    std = torch.zeros(3)
+    length = len(dataloader)
+    for X, _ in dataloader:
+        for d in range(3):
+            mean[d] += X[:, d, :, :].mean()
+            std[d] += X[:, d, :, :].std()
+
+    mean.div_(length)
+    std.div_(length)
+    return list(mean.numpy()), list(std.numpy())

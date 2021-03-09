@@ -10,6 +10,8 @@
 @Desc              :   None
 ################################################################################
 """
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -50,13 +52,13 @@ F19   - 1000          (Linear, ReLU, Softmax)
 
 # 64表示conv2d(c=64,k=3x3,s=1,p=1)  ’M’ 表示maxpooling()
 cfgs = {
-    'A': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
+    'A': [64,     'M', 128,      'M', 256, 256,           'M', 512, 512,          'M', 512, 512,            'M'],
 
-    'B': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
+    'B': [64, 64, 'M', 128, 128, 'M', 256, 256,           'M', 512, 512,          'M', 512, 512,            'M'],
 
     # 'C': [64, 64, 'M', 128, 128, 'M', 256, 256, 256-1x1, 'M', 512, 512, 512-1x1, 'M', 512, 512, 512-1x1, 'M'],
 
-    'D': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M'],
+    'D': [64, 64, 'M', 128, 128, 'M', 256, 256, 256,      'M', 512, 512, 512,      'M', 512, 512, 512,      'M'],
 
     'E': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512, 'M'],
 }
@@ -91,6 +93,8 @@ class VGGNet(nn.Module):
             # nn.Softmax(dim=1)
         )
 
+        self._initialize_weights()
+
     def forward(self, x):
 
         x = self.feature(x)
@@ -113,6 +117,13 @@ class VGGNet(nn.Module):
                 in_channel = config
 
         return nn.Sequential(*layers)
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+                m.bias.data.zero_()
 
 
 def vgg11_bn(num_classes):

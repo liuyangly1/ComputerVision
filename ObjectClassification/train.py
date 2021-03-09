@@ -23,8 +23,10 @@ import cv2
 import torch
 import torch.nn as nn
 import torch.optim
+import torchvision.datasets as datasets
+import torchvision.transforms as transforms
 
-
+from conf import settings
 from dataset import get_CIFAR_100_dataloader
 from utils import get_network, get_criterion, get_optimizer, accuracy
 from utils import adjust_learning_rate
@@ -38,29 +40,25 @@ def parse_args():
 
     parser = argparse.ArgumentParser(description='PyTorch CIFAR100 Training')
 
-    parser.add_argument('data', metavar='DIR', default='./data/cifar-100-python',
-                        help='path to dataset')
     parser.add_argument('-m', '--comment', metavar='COMMENT', default='',
                         help='reason for training')
     parser.add_argument('--seed', metavar='N', default=0, type=int,
                         help='seed for training')
-    parser.add_argument('--gpu', default=0, type=int,
+    parser.add_argument('--gpu', default=5, type=int,
                         help='GPU id to use,-1 for cud.')
     parser.add_argument('-a', '--arch', metavar='ARCH', default='VGGNet',
-                        help='model architecture (default: alexnet)')
+                        help='model architecture')
     parser.add_argument('--num_classes', type=int, default=100,
                         help="number of dataset category.")
     parser.add_argument('-j', '--num_workers', default=4, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
     parser.add_argument('--epochs', default=100, type=int, metavar='N',
                         help='number of total epochs to run')
-    parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
-                        help='manual epoch number (useful on restarts)')
-    parser.add_argument('-b', '--batch-size', default=1, type=int, metavar='N',
+    parser.add_argument('-b', '--batch-size', default=128, type=int, metavar='N',
                         help='mini-batch size (default: 128), this is the total '
                              'batch size of all GPUs on the current node when '
                              'using Data Parallel or Distributed Data Parallel')
-    parser.add_argument('--shuffle', dest='shuffle', action='store_true',
+    parser.add_argument('-s', '--shuffle', dest='shuffle', default=True,
                         help='shuffle data for train.')
     parser.add_argument('--lr', '--learning-rate', default=0.01, type=float,
                         metavar='LR', help='initial learning rate', dest='lr')
@@ -69,12 +67,10 @@ def parse_args():
     parser.add_argument('--wd', '--weight-decay', default=5e-4, type=float,
                         metavar='W', help='weight decay (default: 1e-4)',
                         dest='weight_decay')
-    parser.add_argument('-p', '--print-freq', default=10, type=int, metavar='N',
-                        help='print frequency (default: 10)')
     parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                         help='evaluate model on validation set')
-    # parser.add_argument('--pretrained', dest='pretrained', action='store_true',
-    #                     help='use pre-trained model')
+    parser.add_argument('-p', '--print-freq', default=10, type=int,
+                        metavar='N', help='print frequency (default: 10)')
 
     return parser.parse_args()
 
@@ -123,10 +119,8 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         if i % args.print_freq == 0:
             progress.print(i)
 
-    return top1.avg, losses.avg
 
-
-def validate(val_loader, model, criterion, args):
+def evaluate(val_loader, model, criterion, args):
     batch_time = AverageMeter('Time', ':6.3f')
     losses = AverageMeter('Loss', ':4.4f')
     top1 = AverageMeter('Acc@1', ':6.2f')
@@ -142,7 +136,7 @@ def validate(val_loader, model, criterion, args):
         for i, (images, target) in enumerate(val_loader):
             if args.gpu is not None:
                 images = images.cuda(args.gpu, non_blocking=True)
-            target = target.cuda(args.gpu, non_blocking=True)
+                target = target.cuda(args.gpu, non_blocking=True)
 
             # compute output
             output = model(images)
@@ -171,10 +165,6 @@ def main():
     # 参数
     args = parse_args()
 
-    # 设置工作时间
-    start_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    args.job_name = f"{start_time}_{args.comment}" if args.comment is not None else start_time
-
     # seed
     if args.seed is not None:
         random.seed(args.seed)
@@ -195,70 +185,86 @@ def main():
 
     global best_acc1
 
-    model = get_network(args.arch, args.num_classes)
-    model = model.to(device)
+    # Data loading code
+    cifar100_training_loader = get_CIFAR_100_dataloader(
+                                    root=settings.ROOT,
+                                    batch_size=args.batch_size,
+                                    shuffle=args.shuffle,
+                                    num_workers=args.num_workers,
+                                    train=True,
+                                    normalize=True,
+                                    mean=settings.CIFAR100_TRAIN_MEAN,
+                                    std=settings.CIFAR100_TRAIN_STD,
+                                )
+
+    cifar100_test_loader = get_CIFAR_100_dataloader(
+                                    root=settings.ROOT,
+                                    batch_size=args.batch_size,
+                                    shuffle=args.shuffle,
+                                    num_workers=args.num_workers,
+                                    train=False,
+                                    normalize=True,
+                                    mean=settings.CIFAR100_TRAIN_MEAN,
+                                    std=settings.CIFAR100_TRAIN_STD,
+                                )
+
+    net = get_network(args.arch, settings.NUM_CLASSES)
+    net = net.to(device)
 
     # define loss function (criterion) and optimizer
     criterion = get_criterion()
     criterion = criterion.to(device)
 
-    optimizer = get_optimizer(
-                    model, args.lr,
-                    momentum=args.momentum,
-                    weight_decay=args.weight_decay
-                )
+    optimizer = get_optimizer(net, args.lr, args.momentum, args.weight_decay)
 
-    # Data loading code
-    cifar100_training_loader = get_CIFAR_100_dataloader(
-                                    root=args.data,
-                                    batch_size=args.batch_size,
-                                    shuffle=args.shuffle,
-                                    num_workers=args.num_workers,
-                                    mean=(0.5, 0.5, 0.5),
-                                    std=(0.5, 0.5, 0.5),
-                                    train=True
-                                )
+    # # use tensorboard
+    # if not os.path.exists(settings.LOG_DIR):
+    #     os.mkdir(settings.LOG_DIR)
+    # writer = SummaryWriter(log_dir=os.path.join(settings.LOG_DIR, args.arch, settings.TIME_NOW))
+    # # 添加网络图
+    # # input_tensor = torch.Tensor(2, 3, 32, 32).cuda()
+    # # writer.add_graph(net, input_tensor)
 
-    cifar100_test_loader = get_CIFAR_100_dataloader(
-                                    root=args.data,
-                                    batch_size=args.batch_size,
-                                    shuffle=args.shuffle,
-                                    num_workers=args.num_workers,
-                                    mean=(0.5, 0.5, 0.5),
-                                    std=(0.5, 0.5, 0.5),
-                                    train=False
-                                )
-    if args.evaluate:
-        top1 = validate(cifar100_test_loader, model, criterion, args)
-        with open('res.txt', 'w') as f:
-            print(f"Acc@1: {top1}", file=f)
-        return
+    # # create checkpoint folder to save model
+    checkpoint_path = os.path.join(settings.CHECKPOINT_PATH, args.arch, settings.TIME_NOW)
+    if not os.path.exists(checkpoint_path):
+        os.makedirs(checkpoint_path, exist_ok=True)
+    checkpoint_path = os.path.join(checkpoint_path, 'checkpoint-{arch}-{epoch}.pth')
 
-    for epoch in range(args.start_epoch, args.epochs):
+    # if args.evaluate:
+    #     top1 = evaluate(cifar100_test_loader, net, criterion, args)
+    #     with open('res.txt', 'w') as f:
+    #         print(f"Acc@1: {top1}", file=f)
+    #     return
 
-        # if args.distributed:
-        #     train_sampler.set_epoch(epoch)
+    for epoch in range(args.epochs):
+
         adjust_learning_rate(optimizer, epoch, args)
 
         # train for one epoch
-        acc1, losses = train(cifar100_training_loader, model, criterion, optimizer, epoch, args)
+        train(cifar100_training_loader, net, criterion, optimizer, epoch, args)
 
         # evaluate on validation set
-        acc1 = validate(cifar100_test_loader, model, criterion, args)
+        acc1 = evaluate(cifar100_test_loader, net, criterion, args)
 
         # remember best acc@1 and save checkpoint
         is_best = acc1 > best_acc1
         best_acc1 = max(acc1, best_acc1)
 
-        if (epoch+1) % 100 == 0:
+        # writer.add_scalar('Train/loss', losses, epoch)
+        # writer.add_scalar('Val/acc', acc1, epoch)
+
+        if (epoch+1) % 10 == 0:
             save_checkpoint({
                 'epoch': epoch + 1,
                 'arch': args.arch,
-                'state_dict': model.state_dict(),
+                'state_dict': net.state_dict(),
                 'best_acc1': best_acc1,
                 'optimizer': optimizer.state_dict(),
-                # 'amp': amp.state_dict(),
-            }, is_best, "./checkpoint/checkpoint_epoch%s_loss%s_acc%s.pth" % (epoch + 1, losses, acc1))
+                },
+                is_best,
+                checkpoint_path.format(arch=args.arch, epoch=epoch)
+            )
 
 
 if __name__ == "__main__":
