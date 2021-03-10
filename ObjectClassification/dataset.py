@@ -112,35 +112,23 @@ def get_CIFAR_100_dataloader(
     shuffle,
     num_workers,
     train=True,
-    normalize=True,
-    mean=(0.5, 0.5, 0.5),
-    std=(0.5, 0.5, 0.5)
+    mean=(0, 0, 0),
+    std=(1, 1, 1)
 ):
 
     transform_train = transforms.Compose([
         transforms.ToPILImage(),
+        transforms.RandomCrop(32),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomRotation(15),
         transforms.ToTensor(),
-
+        transforms.Normalize(mean, std)
     ])
 
     transform_test = transforms.Compose([
         transforms.ToTensor(),
+        transforms.Normalize(mean, std)
     ])
-
-    if normalize:
-        transform_train = transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.RandomCrop(32),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(15),
-            transforms.ToTensor(),
-            transforms.Normalize(mean, std)
-        ])
-
-        transform_test = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(mean, std)
-        ])
 
     if train:
         dataset = CIFAR100Dataset(root, train=True, transform=transform_train)
@@ -169,13 +157,12 @@ if __name__ == '__main__':
                         shuffle=True,
                         num_workers=0,
                         train=True,
-                        normalize=False,
                         mean=(0, 0, 0),
                         std=(1, 1, 1),
                     )
     # # --图像的均值和方差------------------------------------------------
-    # train_mean, train_std = compute_mean_std(train_loader, normalize=True)
-    # print(train_mean, train_std)
+    train_mean, train_std = compute_mean_std(train_loader)
+    print(train_mean, train_std)
 
     # # --可视化,使用OpenCV----------------------------------------------
     (images, lables) = next(iter(train_loader))

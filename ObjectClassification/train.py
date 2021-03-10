@@ -17,14 +17,13 @@ import random
 import time
 from datetime import datetime
 
-import warnings
-
 import cv2
 import torch
 import torch.nn as nn
 import torch.optim
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
+from tensorboardX import SummaryWriter
 
 from conf import settings
 from dataset import get_CIFAR_100_dataloader
@@ -48,12 +47,18 @@ def parse_args():
                         help='GPU id to use,-1 for cud.')
     parser.add_argument('-a', '--arch', metavar='ARCH', default='VGGNet',
                         help='model architecture')
+    parser.add_argument('--pretrained', dest='pretrained', action='store_true',
+                        help='use pre-trained model')
+    parser.add_argument('--resume', default='', type=str, metavar='PATH',
+                        help='path to latest checkpoint (default: none)')
     parser.add_argument('--num_classes', type=int, default=100,
                         help="number of dataset category.")
     parser.add_argument('-j', '--num_workers', default=4, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
     parser.add_argument('--epochs', default=100, type=int, metavar='N',
                         help='number of total epochs to run')
+    parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
+                        help='manual epoch number (useful on restarts)')
     parser.add_argument('-b', '--batch-size', default=128, type=int, metavar='N',
                         help='mini-batch size (default: 128), this is the total '
                              'batch size of all GPUs on the current node when '
@@ -119,6 +124,8 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         if i % args.print_freq == 0:
             progress.print(i)
 
+    return losses.avg, top1.avg
+
 
 def evaluate(val_loader, model, criterion, args):
     batch_time = AverageMeter('Time', ':6.3f')
@@ -158,7 +165,7 @@ def evaluate(val_loader, model, criterion, args):
         print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
               .format(top1=top1, top5=top5))
 
-    return top1.avg
+    return losses.avg, top1.avg
 
 
 def main():
@@ -169,19 +176,18 @@ def main():
     if args.seed is not None:
         random.seed(args.seed)
         torch.manual_seed(args.seed)
-        warnings.warn('You have chosen to seed training.')
+        print(f"You have chosen to seed {args.seed} training.")
 
     # gpu
     device = torch.device("cpu")
     if torch.cuda.is_available():
 
         if args.gpu is not None and args.gpu != -1:
-            warnings.warn('You have chosen a specific GPU.')
             print(f"Use GPU: {args.gpu} for training!")
             torch.cuda.set_device(args.gpu)
             device = torch.device("cuda:%s" % args.gpu)
         else:
-            warnings.warn('You have a CUDA device, so you should probably run cuda')
+            print("You have a CUDA device, so you should probably run cuda.")
 
     global best_acc1
 
@@ -192,7 +198,6 @@ def main():
                                     shuffle=args.shuffle,
                                     num_workers=args.num_workers,
                                     train=True,
-                                    normalize=True,
                                     mean=settings.CIFAR100_TRAIN_MEAN,
                                     std=settings.CIFAR100_TRAIN_STD,
                                 )
@@ -203,7 +208,6 @@ def main():
                                     shuffle=args.shuffle,
                                     num_workers=args.num_workers,
                                     train=False,
-                                    normalize=True,
                                     mean=settings.CIFAR100_TRAIN_MEAN,
                                     std=settings.CIFAR100_TRAIN_STD,
                                 )
@@ -217,42 +221,61 @@ def main():
 
     optimizer = get_optimizer(net, args.lr, args.momentum, args.weight_decay)
 
-    # # use tensorboard
-    # if not os.path.exists(settings.LOG_DIR):
-    #     os.mkdir(settings.LOG_DIR)
-    # writer = SummaryWriter(log_dir=os.path.join(settings.LOG_DIR, args.arch, settings.TIME_NOW))
-    # # 添加网络图
-    # # input_tensor = torch.Tensor(2, 3, 32, 32).cuda()
-    # # writer.add_graph(net, input_tensor)
+    if args.resume:
+        if os.path.isfile(args.resume):
+            print(f"=> loading checkpoint '{args.resume}'")
+            checkpoint = torch.load(args.resume)
+            args.start_epoch = checkpoint['epoch']
+            best_acc1 = checkpoint['best_acc1']
+            if args.gpu is not None:
+                # best_acc1 may be from a checkpoint from a different GPU
+                best_acc1 = best_acc1.to(args.gpu)
+            net.load_state_dict(checkpoint['state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            print(f"=> loaded checkpoint '{args.resume}' (epoch {checkpoint['epoch']})")
+        else:
+            print(f"=> no checkpoint found at '{args.resume}'")
+
+    if args.evaluate:
+        top1 = evaluate(cifar100_test_loader, net, criterion, args)
+        with open('res.txt', 'w') as f:
+            print(f"Acc@1: {top1}", file=f)
+        return
+
+    # use tensorboard
+    if not os.path.exists(settings.LOG_DIR):
+        os.mkdir(settings.LOG_DIR)
+    writer = SummaryWriter(log_dir=os.path.join(settings.LOG_DIR, args.arch, settings.TIME_NOW))
+
+    # 添加网络图
+    input_tensor = next(iter(cifar100_training_loader))[0].cuda()
+    writer.add_graph(net, input_tensor)
 
     # # create checkpoint folder to save model
-    checkpoint_path = os.path.join(settings.CHECKPOINT_PATH, args.arch, settings.TIME_NOW)
+    checkpoint_path = os.path.join(settings.CHECKPOINT_PATH, settings.TIME_NOW)
     if not os.path.exists(checkpoint_path):
         os.makedirs(checkpoint_path, exist_ok=True)
     checkpoint_path = os.path.join(checkpoint_path, 'checkpoint-{arch}-{epoch}.pth')
 
-    # if args.evaluate:
-    #     top1 = evaluate(cifar100_test_loader, net, criterion, args)
-    #     with open('res.txt', 'w') as f:
-    #         print(f"Acc@1: {top1}", file=f)
-    #     return
-
-    for epoch in range(args.epochs):
+    for epoch in range(args.start_epoch, args.epochs):
 
         adjust_learning_rate(optimizer, epoch, args)
 
         # train for one epoch
-        train(cifar100_training_loader, net, criterion, optimizer, epoch, args)
+        train_loss, tran_acc1 = train(cifar100_training_loader, net, criterion, optimizer, epoch, args)
 
         # evaluate on validation set
-        acc1 = evaluate(cifar100_test_loader, net, criterion, args)
+        test_loss, test_acc1 = evaluate(cifar100_test_loader, net, criterion, args)
 
         # remember best acc@1 and save checkpoint
-        is_best = acc1 > best_acc1
-        best_acc1 = max(acc1, best_acc1)
+        is_best = test_acc1 > best_acc1
+        best_acc1 = max(test_acc1, best_acc1)
 
-        # writer.add_scalar('Train/loss', losses, epoch)
-        # writer.add_scalar('Val/acc', acc1, epoch)
+        writer.add_scalar('train/loss', train_loss, epoch)
+        writer.add_scalar('train/acc', tran_acc1, epoch)
+
+        writer.add_scalar('test/loss', test_loss, epoch)
+        writer.add_scalar('test/acc', test_acc1, epoch)
 
         if (epoch+1) % 10 == 0:
             save_checkpoint({
@@ -263,7 +286,7 @@ def main():
                 'optimizer': optimizer.state_dict(),
                 },
                 is_best,
-                checkpoint_path.format(arch=args.arch, epoch=epoch)
+                checkpoint_path.format(arch=args.arch, epoch=epoch+1)
             )
 
 

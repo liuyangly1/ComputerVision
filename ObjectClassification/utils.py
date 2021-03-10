@@ -12,6 +12,7 @@
 """
 import shutil
 import sys
+import os
 
 import numpy as np
 import torch
@@ -115,10 +116,11 @@ def accuracy(output, target, topk=(1,)):
 def save_checkpoint(state, is_best, filename='checkpoint.pth'):
     torch.save(state, filename)
     if is_best:
-        shutil.copyfile(filename, "model_best.pth")
+        new_filename = os.path.join(os.path.split(filename)[0], "model_best.pth")
+        shutil.copyfile(filename, new_filename)
 
 
-def compute_mean_std(dataloader, normalize=True):
+def compute_mean_std(dataloader):
     """compute the mean and std of cifar100 dataset
     Args:
         cifar100_training_dataset or cifar100_test_dataset
