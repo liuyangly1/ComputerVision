@@ -236,12 +236,6 @@ def main():
         else:
             print(f"=> no checkpoint found at '{args.resume}'")
 
-    if args.evaluate:
-        top1 = evaluate(cifar100_test_loader, net, criterion, args)
-        with open('res.txt', 'w') as f:
-            print(f"Acc@1: {top1}", file=f)
-        return
-
     # use tensorboard
     if not os.path.exists(settings.LOG_DIR):
         os.mkdir(settings.LOG_DIR)
@@ -256,6 +250,12 @@ def main():
     if not os.path.exists(checkpoint_path):
         os.makedirs(checkpoint_path, exist_ok=True)
     checkpoint_path = os.path.join(checkpoint_path, 'checkpoint-{arch}-{epoch}.pth')
+
+    if args.evaluate:
+        top1 = evaluate(cifar100_test_loader, net, criterion, args)
+        with open('res.txt', 'w') as f:
+            print(f"Acc@1: {top1}", file=f)
+        return
 
     for epoch in range(args.start_epoch, args.epochs):
 
